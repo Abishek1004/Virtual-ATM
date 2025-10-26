@@ -67,7 +67,7 @@ class SavingsAccount extends Account {
         }
         if (balance - amount < minimumBalance) {
             throw new IllegalArgumentException(
-                String.format("Withdrawal would violate minimum balance of ₹%.2f", minimumBalance));
+                    String.format("Withdrawal would violate minimum balance of ₹%.2f", minimumBalance));
         }
         super.withdraw(amount);
     }
@@ -77,7 +77,7 @@ class SavingsAccount extends Account {
         // deposit will add to history
         deposit(interest);
         history.addTransaction(
-            String.format("Interest applied at rate %.2f%%: ₹%.2f", interestRate * 100, interest)
+                String.format("Interest applied at rate %.2f%%: ₹%.2f", interestRate * 100, interest)
         );
     }
 }
@@ -109,8 +109,8 @@ class CurrentAccount extends Account {
         if (balance < minimumBalance) {
             balance -= penaltyFee;
             String penTx = String.format(
-                "Below min balance. Penalty of ₹%.2f applied. New Balance: ₹%.2f",
-                penaltyFee, balance
+                    "Below min balance. Penalty of ₹%.2f applied. New Balance: ₹%.2f",
+                    penaltyFee, balance
             );
             history.addTransaction(penTx);
             System.out.println("Penalty applied: ₹" + penaltyFee);
@@ -197,10 +197,10 @@ public class VirtualATM {
         // Add some users. In real scenario, this would come from DB or file.
         // Here's example data:
         bank.addUser(342351231212L, 1234,
-            new SavingsAccount("SA342351231212", 5000.0, 0.03, 1000.0));
-            
+                new SavingsAccount("SA342351231212", 5000.0, 0.03, 1000.0));
+
         bank.addUser(7647583948787L, 1231,
-            new CurrentAccount("CA7647583948787", 10000.0, 5000.0, 50.0));
+                new CurrentAccount("CA7647583948787", 10000.0, 5000.0, 50.0));
         // Add more as needed
     }
 
@@ -239,7 +239,8 @@ public class VirtualATM {
     }
 
     private void atmMenu(Account account) {
-        while (true) {
+        String ch="yes";
+        while (ch.equalsIgnoreCase("yes")) {
             System.out.println("\n--- ATM Menu ---");
             System.out.println("1. Check Balance");
             System.out.println("2. Deposit");
@@ -311,6 +312,15 @@ public class VirtualATM {
                 default:
                     System.out.println("Invalid choice. Please choose 1–7.");
             }
+            System.out.print("\nDo you want to go back (YES/NO): ");
+            input.nextLine(); // clear newline from buffer
+            ch = input.nextLine();
+
+            if (!ch.equalsIgnoreCase("yes")) {
+                System.out.println("Thank you for using the ATM. Goodbye!");
+                System.exit(0);
+            }
+
         }
     }
 
