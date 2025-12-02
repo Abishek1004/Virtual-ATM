@@ -1,16 +1,19 @@
 import java.util.*;
 import java.text.SimpleDateFormat;
 
-// Base account class
+/* ----------------------------
+   Account (abstract base class)
+   ---------------------------- */
 abstract class Account {
+    private final String accHolderName;
     protected String accountNumber;
-    // Using BigDecimal (or long for cents) is better in real systems, but for simplicity using double
     protected double balance;
     protected TransactionHistory history;
 
-    public Account(String accountNumber, double initialBalance) {
+    public Account(String accountNumber,String accHolderName) {
+        this.accHolderName = accHolderName;
         this.accountNumber = accountNumber;
-        this.balance = initialBalance;
+        this.balance = 0.0; // default initial balance = 0.0
         this.history = new TransactionHistory();
     }
 
@@ -23,21 +26,15 @@ abstract class Account {
     }
 
     public void deposit(double amount) {
-        if (amount <= 0) {
-            throw new IllegalArgumentException("Deposit amount must be positive");
-        }
+        if (amount <= 0) throw new IllegalArgumentException("Deposit amount must be positive");
         balance += amount;
         String tx = String.format("Deposited ₹%.2f, New Balance: ₹%.2f", amount, balance);
         history.addTransaction(tx);
     }
 
     public void withdraw(double amount) {
-        if (amount <= 0) {
-            throw new IllegalArgumentException("Withdraw amount must be positive");
-        }
-        if (amount > balance) {
-            throw new IllegalArgumentException("Insufficient funds");
-        }
+        if (amount <= 0) throw new IllegalArgumentException("Withdraw amount must be positive");
+        if (amount > balance) throw new IllegalArgumentException("Insufficient funds");
         balance -= amount;
         String tx = String.format("Withdrew ₹%.2f, New Balance: ₹%.2f", amount, balance);
         history.addTransaction(tx);
@@ -46,25 +43,30 @@ abstract class Account {
     public TransactionHistory getHistory() {
         return history;
     }
+
+    public String getAccHolderName(){
+        return accHolderName;
+    }
+
+    public abstract String getAccountType();
 }
 
-// Savings account with interest & minimum balance requirement
+/* ----------------------------
+   SavingsAccount
+   ---------------------------- */
 class SavingsAccount extends Account {
     private double interestRate;  // e.g. 0.03 for 3%
     private double minimumBalance;
 
-    public SavingsAccount(String accountNumber, double initialBalance,
-                          double interestRate, double minimumBalance) {
-        super(accountNumber, initialBalance);
+    public SavingsAccount(String accountNumber,String accHolderName, double interestRate, double minimumBalance) {
+        super(accountNumber,accHolderName);
         this.interestRate = interestRate;
         this.minimumBalance = minimumBalance;
     }
 
     @Override
     public void withdraw(double amount) {
-        if (amount <= 0) {
-            throw new IllegalArgumentException("Withdraw amount must be positive");
-        }
+        if (amount <= 0) throw new IllegalArgumentException("Withdraw amount must be positive");
         if (balance - amount < minimumBalance) {
             throw new IllegalArgumentException(
                     String.format("Withdrawal would violate minimum balance of ₹%.2f", minimumBalance));
@@ -73,77 +75,59 @@ class SavingsAccount extends Account {
     }
 
     public void applyInterest() {
+        if (balance <= 0) {
+            history.addTransaction("Interest applied but balance is zero or negative — nothing added.");
+            return;
+        }
         double interest = balance * interestRate;
-        // deposit will add to history
-        deposit(interest);
-        history.addTransaction(
-                String.format("Interest applied at rate %.2f%%: ₹%.2f", interestRate * 100, interest)
-        );
+        deposit(interest); // deposit handles history entry
+        history.addTransaction(String.format("Interest applied at rate %.2f%%: ₹%.2f", interestRate * 100, interest));
+    }
+
+    @Override
+    public String getAccountType() {
+        return "Savings";
     }
 }
 
-// Current (checking) account with possible penalty for dropping below minimum
+/* ----------------------------
+   CurrentAccount
+   ---------------------------- */
 class CurrentAccount extends Account {
     private double minimumBalance;
     private double penaltyFee;
 
-    public CurrentAccount(String accountNumber, double initialBalance,
-                          double minimumBalance, double penaltyFee) {
-        super(accountNumber, initialBalance);
+    public CurrentAccount(String accountNumber,String accHolderName, double minimumBalance, double penaltyFee) {
+        super(accountNumber,accHolderName);
         this.minimumBalance = minimumBalance;
         this.penaltyFee = penaltyFee;
     }
 
     @Override
     public void withdraw(double amount) {
-        if (amount <= 0) {
-            throw new IllegalArgumentException("Withdraw amount must be positive");
-        }
-        if (amount > balance) {
-            throw new IllegalArgumentException("Insufficient funds");
-        }
-        balance -= amount;
-        String tx = String.format("Withdrew ₹%.2f, New Balance: ₹%.2f", amount, balance);
-        history.addTransaction(tx);
+        if (amount <= 0) throw new IllegalArgumentException("Withdraw amount must be positive");
+        if (amount > balance) throw new IllegalArgumentException("Insufficient funds");
+        super.withdraw(amount); // subtract & record
 
         if (balance < minimumBalance) {
             balance -= penaltyFee;
-            String penTx = String.format(
-                    "Below min balance. Penalty of ₹%.2f applied. New Balance: ₹%.2f",
-                    penaltyFee, balance
-            );
+            String penTx = String.format("Below min balance. Penalty of ₹%.2f applied. New Balance: ₹%.2f", penaltyFee, balance);
             history.addTransaction(penTx);
-            System.out.println("Penalty applied: ₹" + penaltyFee);
+            System.out.println("Penalty applied: ₹" + String.format("%.2f", penaltyFee));
         }
     }
-}
 
-// Class to store user metadata (pin, mobile, etc.)
-class UserData {
-    private long accNumber;
-    private long mobileNumber;
-    private int pin;
-
-    public UserData(long accNumber, long mobileNumber, int pin) {
-        this.accNumber = accNumber;
-        this.mobileNumber = mobileNumber;
-        this.pin = pin;
-    }
-
-    public long getAccNumber() {
-        return accNumber;
-    }
-    public int getPin() {
-        return pin;
-    }
-    public long getMobileNumber() {
-        return mobileNumber;
+    @Override
+    public String getAccountType() {
+        return "Current";
     }
 }
 
-// Transaction history wrapper
+/* ----------------------------
+   TransactionHistory
+   ---------------------------- */
 class TransactionHistory {
-    private List<String> transactions = new ArrayList<>();
+    private final List<String> transactions = new ArrayList<>();
 
     public void addTransaction(String transaction) {
         String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
@@ -152,17 +136,21 @@ class TransactionHistory {
 
     public void printMiniStatement() {
         System.out.println("----- Mini Statement -----");
-        for (String t : transactions) {
-            System.out.println(t);
+        if (transactions.isEmpty()) {
+            System.out.println("No transactions yet.");
+        } else {
+            for (String t : transactions) System.out.println(t);
         }
         System.out.println("--------------------------");
     }
 }
 
-// Bank class to maintain accounts and user login
+/* ----------------------------
+   Bank (stores accounts & PINs)
+   ---------------------------- */
 class Bank {
-    private Map<Long, Account> accounts = new HashMap<>();
-    private Map<Long, Integer> pinMap = new HashMap<>();
+    private final Map<Long, Account> accounts = new HashMap<>();
+    private final Map<Long, Integer> pinMap = new HashMap<>();
 
     public void addUser(long accNum, int pin, Account account) {
         accounts.put(accNum, account);
@@ -182,81 +170,163 @@ class Bank {
     }
 }
 
-// ATM / UI class
+/* ----------------------------
+   VirtualATM (UI + main logic)
+   ---------------------------- */
 public class VirtualATM {
-    private Bank bank;
-    private Scanner input;
+    private final Bank bank = new Bank();
+    private final Scanner input = new Scanner(System.in);
 
     public VirtualATM() {
-        bank = new Bank();
-        input = new Scanner(System.in);
-        setupDummyUsers();
+        setupDummyUsers(); // optional; you can remove if you want no pre-created users
     }
 
     private void setupDummyUsers() {
-        // Add some users. In real scenario, this would come from DB or file.
-        // Here's example data:
-        bank.addUser(342351231212L, 1234,
-                new SavingsAccount("SA342351231212", 5000.0, 0.03, 1000.0));
-
-        bank.addUser(7647583948787L, 1231,
-                new CurrentAccount("CA7647583948787", 10000.0, 5000.0, 50.0));
-        // Add more as needed
+        // Create two demo users with balance 0.0
+        bank.addUser(123456789012L, 1234, new SavingsAccount("SA123456789012", "Alex",0.03, 1000.0));
+        bank.addUser(7647583948787L, 1231, new CurrentAccount("CA7647583948787", "Joe",5000.0, 50.0));
     }
 
-    public void run() {
-        System.out.print("Enter your Account Number: ");
-        long accNumber = -1L;
+    private void createNewUserAndMaybeLogin() {
+        String AccHolderName;
+        System.out.println("Enter Account Holder Name : ");
+        AccHolderName = input.next();
+
+        System.out.print("Enter new Account number (digits only): ");
+        long accnum=-1L;
         try {
-            accNumber = input.nextLong();
-        } catch (InputMismatchException ime) {
-            System.out.println("Invalid account number input.");
+            accnum = Long.parseLong(input.next());
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid account number. Must be digits only.");
             return;
         }
 
-        if (!bank.hasAccount(accNumber)) {
-            System.out.println("Account not found. Exiting.");
+        if (bank.hasAccount(accnum)) {
+            System.out.println("Account already exists. Choose login from main menu.");
             return;
         }
 
-        System.out.print("Enter your 4-digit PIN: ");
-        String pinStr = input.next();  // read as string for better control
-        if (pinStr.length() != 4 || !pinStr.matches("\\d{4}")) {
-            System.out.println("PIN must be exactly 4 digits. Exiting.");
+        System.out.print("Set a 4-digit PIN: ");
+        String pinStr = input.next();
+        if (!isValidPinString(pinStr)) {
+            System.out.println("Invalid PIN format. PIN must be exactly 4 digits.");
+            return;
+        }
+        System.out.print("Confirm your 4-digit PIN: ");
+        String confirm = input.next();
+        if (!pinStr.equals(confirm)) {
+            System.out.println("PINs do not match. Aborting account creation.");
             return;
         }
         int pin = Integer.parseInt(pinStr);
 
-        if (!bank.validatePin(accNumber, pin)) {
-            System.out.println("Invalid PIN. Exiting.");
+        System.out.println("Choose Account Type:");
+        System.out.println("1. Savings Account (min balance ₹1000)");
+        System.out.println("2. Current Account (min balance ₹5000, penalty ₹50)");
+        System.out.print("Enter choice (1 or 2): ");
+        int type;
+        try {
+            type = Integer.parseInt(input.next());
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid choice. Aborting.");
             return;
         }
 
-        System.out.println("Login successful.");
+        Account account;
+        if (type == 1) {
+            account = new SavingsAccount("SA" + accnum,AccHolderName ,0.03, 1000.0);
+        } else if (type == 2) {
+            account = new CurrentAccount("CA" + accnum, AccHolderName,5000.0, 50.0);
+        } else {
+            System.out.println("Invalid type selected. Defaulting to Savings Account.");
+            account = new SavingsAccount("SA" + accnum, AccHolderName,0.03, 1000.0);
+        }
 
-        Account userAccount = bank.getAccount(accNumber);
-        atmMenu(userAccount);
+        bank.addUser(accnum, pin, account);
+        System.out.println("Account created successfully.");
+
+        System.out.print("Do you want to login to the new account now? (yes/no): ");
+        String ans = input.next();
+        if (ans.equalsIgnoreCase("yes")) {
+            if (bank.validatePin(accnum, pin)) {
+                atmMenu(bank.getAccount(accnum));
+            } else {
+                System.out.println("Unexpected error validating PIN after creation.");
+            }
+        }
+    }
+
+    private boolean isValidPinString(String s) {
+        return s != null && s.matches("\\d{4}");
+    }
+
+    public void run() {
+        System.out.println("==== Welcome to Virtual ATM ====");
+        while (true) {
+            System.out.print("\nEnter your Account Number (or type 'new' to create account, 'exit' to quit): ");
+            String token = input.next();
+
+            if (token.equalsIgnoreCase("exit")) {
+                System.out.println("Goodbye!");
+                break;
+            } else if (token.equalsIgnoreCase("new")) {
+                createNewUserAndMaybeLogin();
+                continue;
+            }
+
+            long accNumber;
+            try {
+                accNumber = Long.parseLong(token);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid account number input.");
+                continue;
+            }
+
+            if (!bank.hasAccount(accNumber)) {
+                System.out.println("Account not found. Type 'new' to create account or try again.");
+                continue;
+            }
+
+            System.out.print("Enter your 4-digit PIN: ");
+            String pinStr = input.next();
+            if (!isValidPinString(pinStr)) {
+                System.out.println("PIN must be exactly 4 digits. Try again.");
+                continue;
+            }
+            int pin = Integer.parseInt(pinStr);
+
+            if (!bank.validatePin(accNumber, pin)) {
+                System.out.println("Invalid PIN. Try again.");
+                continue;
+            }
+
+            System.out.println("Login successful.");
+            Account userAccount = bank.getAccount(accNumber);
+            atmMenu(userAccount);
+        }
+
+        input.close();
     }
 
     private void atmMenu(Account account) {
-        String ch="yes";
-        while (ch.equalsIgnoreCase("yes")) {
-            System.out.println("\n--- ATM Menu ---");
+        while (true) {
+            System.out.println("\n--- ATM Menu (" + account.getAccountType() + " - " + account.getAccountNumber() + " - " +account.getAccHolderName() +") ---");
             System.out.println("1. Check Balance");
             System.out.println("2. Deposit");
             System.out.println("3. Withdraw");
             System.out.println("4. Print Receipt");
             System.out.println("5. Mini Statement");
             System.out.println("6. Apply Interest (Savings only)");
-            System.out.println("7. Exit");
+            System.out.println("7. Create New User");
+            System.out.println("8. Logout to main screen");
             System.out.print("Enter your choice: ");
 
+            String choiceToken = input.next();
             int choice;
             try {
-                choice = input.nextInt();
-            } catch (InputMismatchException ime) {
-                input.nextLine();  // consume invalid input
-                System.out.println("Invalid input. Please enter a number between 1 and 7.");
+                choice = Integer.parseInt(choiceToken);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid choice. Please enter a number between 1 and 8.");
                 continue;
             }
 
@@ -267,13 +337,12 @@ public class VirtualATM {
                 case 2:
                     System.out.print("Enter amount to deposit: ");
                     try {
-                        double amt = input.nextDouble();
+                        double amt = Double.parseDouble(input.next());
                         account.deposit(amt);
                         System.out.println("Successfully deposited ₹" + String.format("%.2f", amt));
                         System.out.println("New Balance: ₹" + String.format("%.2f", account.getBalance()));
-                    } catch (InputMismatchException ime) {
-                        input.nextLine();
-                        System.out.println("Invalid input. Please enter a valid number.");
+                    } catch (NumberFormatException e) {
+                        System.out.println("Invalid amount. Please enter a valid number.");
                     } catch (IllegalArgumentException iae) {
                         System.out.println(iae.getMessage());
                     }
@@ -281,13 +350,12 @@ public class VirtualATM {
                 case 3:
                     System.out.print("Enter amount to withdraw: ");
                     try {
-                        double amt = input.nextDouble();
+                        double amt = Double.parseDouble(input.next());
                         account.withdraw(amt);
                         System.out.println("Withdrawn ₹" + String.format("%.2f", amt));
                         System.out.println("New Balance: ₹" + String.format("%.2f", account.getBalance()));
-                    } catch (InputMismatchException ime) {
-                        input.nextLine();
-                        System.out.println("Invalid input. Please enter a valid number.");
+                    } catch (NumberFormatException e) {
+                        System.out.println("Invalid amount. Please enter a valid number.");
                     } catch (IllegalArgumentException iae) {
                         System.out.println(iae.getMessage());
                     }
@@ -307,27 +375,22 @@ public class VirtualATM {
                     }
                     break;
                 case 7:
-                    System.out.println("Thank you for using the ATM. Goodbye!");
-                    return;
+                    createNewUserAndMaybeLogin();
+                    break;
+                case 8:
+                    System.out.println("Logging out to main screen.");
+                    return; // return to main run loop
                 default:
-                    System.out.println("Invalid choice. Please choose 1–7.");
+                    System.out.println("Invalid choice. Please choose 1–8.");
             }
-            System.out.print("\nDo you want to go back (YES/NO): ");
-            input.nextLine(); // clear newline from buffer
-            ch = input.nextLine();
-
-            if (!ch.equalsIgnoreCase("yes")) {
-                System.out.println("Thank you for using the ATM. Goodbye!");
-                System.exit(0);
-            }
-
         }
     }
 
     private void printReceipt(Account account) {
         System.out.println("----- ATM Receipt -----");
+        System.out.println("Account Holder Name : "+account.getAccHolderName());
         System.out.println("Account Number: " + account.getAccountNumber());
-        System.out.println("Account Type: " + (account instanceof SavingsAccount ? "Savings" : "Current"));
+        System.out.println("Account Type: " + account.getAccountType());
         String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
         System.out.println("Date/Time: " + now);
         System.out.println("Available Balance: ₹" + String.format("%.2f", account.getBalance()));
